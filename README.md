@@ -1,36 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Skoolapp
 
-## Getting Started
+Application web de suivi des élèves pour un éducateur de lycée (Côte d'Ivoire) : fiches élèves, parents, observations, incidents et sanctions, recherche multicritère. Pensée d'abord pour le téléphone, elle s'installe sur l'écran d'accueil.
 
-First, run the development server:
+Voir [PLAN.md](PLAN.md) pour le cahier des charges et la feuille de route.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Stack
+
+- **Next.js 16** (App Router, Server Actions, `proxy.ts`), TypeScript, Tailwind CSS 4
+- **Supabase** : PostgreSQL, authentification, stockage des photos, Row Level Security
+- Hébergement **Vercel** (tâche planifiée quotidienne qui empêche la mise en pause de Supabase)
+
+## Mise en route
+
+### 1. Base de données Supabase
+
+1. Créez un projet sur [supabase.com](https://supabase.com) (région **eu-west-3, Paris**).
+2. Dans **SQL Editor**, exécutez le fichier [supabase/migrations/20261028000000_schema_initial.sql](supabase/migrations/20261028000000_schema_initial.sql).
+3. Dans **Authentication > Sign In / Providers**, désactivez **Allow new users to sign up** : l'application n'a pas de page d'inscription publique.
+4. Dans **Authentication > Users > Add user**, créez le compte de l'éducateur (email et mot de passe, cochez **Auto Confirm User**).
+
+### 2. Variables d'environnement
+
+Copiez `.env.example` en `.env.local`, puis remplissez-le avec les valeurs de **Project Settings > API** :
+
+```
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=...
+CRON_SECRET=...   # chaîne aléatoire, utilisée seulement en production
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. Lancement en local
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Ouvrez http://localhost:3000 et connectez-vous.
 
-## Learn More
+### 4. Mise en ligne sur Vercel
 
-To learn more about Next.js, take a look at the following resources:
+1. Poussez le dépôt sur GitHub, puis importez-le dans Vercel.
+2. Ajoutez les 3 variables d'environnement ci-dessus.
+3. Déployez. La tâche `/api/keepalive` (définie dans `vercel.json`) s'exécutera chaque jour à 6 h.
+4. Sur le téléphone, ouvrez le site puis choisissez **Ajouter à l'écran d'accueil**.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Organisation du code
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+  proxy.ts                    redirige vers /connexion sans session
+  app/
+    connexion/                page de connexion
+    (app)/                    pages protégées (barre de navigation)
+      page.tsx                recherche multicritère + tableau de bord
+      classes/                liste, création, détail d'une classe
+      eleves/                 création (saisie en série), fiche, sous-pages
+      parametres/             types d'incident/sanction, export, déconnexion
+    api/export/               export CSV (Excel) des élèves, observations, incidents
+    api/keepalive/            ping quotidien de la base
+  lib/
+    actions/                  Server Actions (écritures)
+    donnees.ts                lectures
+    supabase/                 clients serveur, navigateur et proxy
+  components/                 UI partagée
+supabase/migrations/          schéma SQL, RLS, recherche, bucket photos
+```
 
-## Deploy on Vercel
+## Recherche
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+La barre de recherche accepte :
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- un nom ou des prénoms, sans tenir compte des accents ni de l'ordre, et avec tolérance aux fautes de frappe ;
+- un matricule ;
+- une date de naissance au format `12/03/2010` ;
+- une partie du numéro de téléphone d'un parent (au moins 4 chiffres).
+
+On peut la combiner avec des filtres : classe, sexe, élèves ayant des incidents.
